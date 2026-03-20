@@ -11,6 +11,9 @@
 - What classes did you include, and what responsibilities did you assign to each?
 
 ---
+Response: 
+- I chose 4 classes for this project - Pet, Tasks, Schedular, and Owner. Pet and Owner classes represents original owner and an animal in real life. While Task represent the entity of task itself. Schedular is like a manager who allows owner/user to change or edit the schedule. 
+- Pet class have name, species, age, and any special needs. Task stores timing, frequency, and priority of the owner. Owner hold's its properties such as name, availability, and preferences to build a plan. Schedular connects all the other classes, pet, tasks, and owner, and is responsible for producing a schedule.
 
 
 **b. Design changes**
@@ -19,6 +22,11 @@
 - If yes, describe at least one change and why you made it.
 
 ---
+Response:
+- Owner has no Pet or Task collection: The owner class is not connected with pet and tasks. This makes owner unaware of his pet or tasks in the app.
+- Schedular only supports a single pet, in real system, we will be having multiple pets
+- Task does not contain any id attribute
+- 
 
 ## 2. Scheduling Logic and Tradeoffs
 
