@@ -1,11 +1,17 @@
 # PawPal+ Project Reflection
 
 ## 1. System Design
-
+- Allow user to input basic pet infromation and their availability. Pet specificities can include(type, age, and any special need).
+- Allow users to edit, add, or remove pet tasks.
+- Generate a daily customizable pet plan that can be changed based on time availability, priorities, and owner preferences. 
+- To develop the system, I think we need pet, owner, task, and manager (does scheduling) class
 **a. Initial design**
 
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
+
+---
+
 
 **b. Design changes**
 
