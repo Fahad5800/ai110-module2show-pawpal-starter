@@ -29,24 +29,30 @@ if st.button("Create Owner & Pet"):
     owner.add_pet(pet)
     st.session_state.owner = owner
     st.session_state.scheduler = Scheduler(owner)
-    st.success(f"Created owner '{owner_name}' with pet '{pet_name}'.")
+    st.success(f"Owner **{owner_name}** created with pet **{pet_name}** ({species}).")
 
 if st.session_state.owner:
-    st.caption(f"Active owner: **{st.session_state.owner.name}** | "
-               f"Pets: {[p.get_summary() for p in st.session_state.owner.pets]}")
+    owner = st.session_state.owner
+    pets = owner.pets
+    cols = st.columns(len(pets) + 1)
+    with cols[0]:
+        st.metric("Owner", owner.name)
+    for i, p in enumerate(pets):
+        with cols[i + 1]:
+            st.metric(f"Pet {i + 1}", p.name, f"{p.species}, age {p.age}")
 
 st.divider()
 
 # ---------------------------------------------------------------------------
 # Add Task
 # ---------------------------------------------------------------------------
-st.subheader("Tasks")
+st.subheader("Add a Task")
 
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     task_title = st.text_input("Task title", value="Morning walk")
 with col2:
-    duration = st.number_input("Duration (minutes)", min_value=1, max_value=240, value=20)
+    duration = st.number_input("Duration (min)", min_value=1, max_value=240, value=20)
 with col3:
     priority = st.selectbox("Priority (1=high)", [1, 2, 3, 4, 5], index=0)
 with col4:
@@ -57,7 +63,7 @@ if st.button("Add task"):
         st.error("Create an owner and pet first.")
     else:
         scheduler: Scheduler = st.session_state.scheduler
-        pet = st.session_state.owner.pets[0]   # use first pet
+        pet = st.session_state.owner.pets[0]
         task = Task(
             task_type=task_title,
             duration=int(duration),
@@ -66,22 +72,51 @@ if st.button("Add task"):
             pet=pet,
         )
         scheduler.add_task(task)
-        st.success(f"Added task: {task.get_description()}")
+        st.success(f"Task **{task_title}** added — {duration} min, priority {priority}, {frequency}.")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Pending tasks
+# ---------------------------------------------------------------------------
+st.subheader("Pending Tasks")
+
+PRIORITY_LABEL = {1: "🔴 High", 2: "🟠 Medium-High", 3: "🟡 Medium", 4: "🟢 Low", 5: "⚪ Minimal"}
 
 if st.session_state.scheduler:
-    all_tasks = st.session_state.scheduler.get_pending_tasks()
-    if all_tasks:
-        st.write("Pending tasks:")
-        st.table([{
-            "id": t.id,
-            "task": t.task_type,
-            "pet": t.pet.name,
-            "duration (min)": t.duration,
-            "priority": t.priority,
-            "frequency": t.frequency.value,
-        } for t in all_tasks])
+    scheduler: Scheduler = st.session_state.scheduler
+    pending = scheduler.filter_tasks(completed=False)
+
+    if pending:
+        pending_sorted = sorted(pending, key=lambda t: t.priority)
+
+        col_total, col_high, col_today = st.columns(3)
+        high_priority = [t for t in pending_sorted if t.priority == 1]
+        due_today = [t for t in pending_sorted if t.is_due_today()]
+        col_total.metric("Total pending", len(pending_sorted))
+        col_high.metric("High priority", len(high_priority))
+        col_today.metric("Due today", len(due_today))
+
+        rows = [{
+            "Priority": PRIORITY_LABEL.get(t.priority, str(t.priority)),
+            "Task": t.task_type,
+            "Pet": t.pet.name,
+            "Duration (min)": t.duration,
+            "Frequency": t.frequency.value.capitalize(),
+        } for t in pending_sorted]
+
+        st.dataframe(
+            rows,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Priority": st.column_config.TextColumn("Priority", width="medium"),
+                "Task": st.column_config.TextColumn("Task", width="large"),
+                "Duration (min)": st.column_config.NumberColumn("Duration (min)", format="%d min"),
+            },
+        )
     else:
-        st.info("No tasks yet. Add one above.")
+        st.info("No pending tasks. Add one above.")
 
 st.divider()
 
@@ -96,5 +131,58 @@ if st.button("Generate schedule"):
     else:
         scheduler: Scheduler = st.session_state.scheduler
         scheduler.generate_plan(date.today())
-        st.success("Schedule generated!")
-        st.text(scheduler.get_plan_summary())
+
+        sorted_tasks = scheduler.get_tasks_sorted_by_time()
+        unscheduled = [
+            t for t in scheduler.owner.get_all_tasks()
+            if t.scheduled_time is None and not t.completed and t.is_due_today()
+        ]
+        overlap_conflicts = [c for c in scheduler.conflicts if c.get("type") == "time_overlap"]
+
+        # Summary metrics
+        col_sched, col_unsched, col_conflicts = st.columns(3)
+        col_sched.metric("Scheduled", len(sorted_tasks))
+        col_unsched.metric("Unscheduled", len(unscheduled))
+        col_conflicts.metric("Conflicts", len(overlap_conflicts) + len(unscheduled))
+
+        if sorted_tasks:
+            st.success(f"Schedule generated — {len(sorted_tasks)} task(s) placed for today.")
+            st.write("**Today's schedule (sorted by time):**")
+            schedule_rows = [{
+                "Time": t.scheduled_time.strftime("%I:%M %p"),
+                "Task": t.task_type,
+                "Pet": t.pet.name,
+                "Duration (min)": t.duration,
+                "Priority": PRIORITY_LABEL.get(t.priority, str(t.priority)),
+            } for t in sorted_tasks]
+
+            st.dataframe(
+                schedule_rows,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Time": st.column_config.TextColumn("Time", width="small"),
+                    "Task": st.column_config.TextColumn("Task", width="large"),
+                    "Duration (min)": st.column_config.NumberColumn("Duration (min)", format="%d min"),
+                    "Priority": st.column_config.TextColumn("Priority", width="medium"),
+                },
+            )
+        else:
+            st.warning("No tasks could be scheduled for today.")
+
+        if unscheduled:
+            st.warning(f"{len(unscheduled)} task(s) could not fit into available time slots.")
+            with st.expander("View unscheduled tasks"):
+                for t in unscheduled:
+                    st.error(
+                        f"**{t.task_type}** — {t.pet.name} | {t.duration} min | priority {t.priority}"
+                    )
+
+        if overlap_conflicts:
+            st.error(f"{len(overlap_conflicts)} time overlap(s) detected in the schedule.")
+            with st.expander("View overlap details"):
+                for c in overlap_conflicts:
+                    st.warning(f"**{c['task1']}** overlaps **{c['task2']}**")
+                    st.caption(c["time"])
+        elif not unscheduled:
+            st.success("No conflicts detected — all tasks fit cleanly.")
